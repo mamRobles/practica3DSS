@@ -3,6 +3,10 @@ package com.dss.p1.config;
 import org.springframework.boot.security.autoconfigure.web.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -19,13 +23,29 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // API REST para Android: HTTP Basic, sin sesión ni CSRF, 401 en vez de redirigir a /login
     @Bean
+    @Order(1)
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/api/**")
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
+                .anyRequest().authenticated()
+            )
+            .httpBasic(basic -> basic.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable());
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/", "/index", "/index.html", "/login", "/error",
                                  "/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
-                .requestMatchers("/api/**").permitAll()   // API REST pública (cliente Android)
                 .requestMatchers(HttpMethod.GET, "/products", "/cart", "/cart/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/cart/**").permitAll()
                 .requestMatchers("/admin/**",
@@ -37,8 +57,7 @@ public class SecurityConfig {
                 .defaultSuccessUrl("/", true))
             .logout(logout -> logout.logoutUrl("/login?logout").logoutSuccessUrl("/").permitAll())
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers(PathRequest.toH2Console())
-                .ignoringRequestMatchers("/api/**"));     // la app Android no envía token CSRF
+                .ignoringRequestMatchers(PathRequest.toH2Console()));
         return http.build();
     }
 
